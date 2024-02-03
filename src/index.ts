@@ -5,12 +5,17 @@ export type Status = 'created' | 'pending' | 'done'
 export class Future<T> {
     constructor(
         public fn: (done: (result: T) => void) => void,
-        public thenFn?: (result: T) => void,
+        public subscribers: ((result: T) => void)[] = [],
         public status: Status = 'created'
     ) {}
 
-    map(mapFn: (result: T) => void): Future<T> {
-        this.thenFn = mapFn
+    onComplete(mapFn: (result: T) => void): Future<T> {
+        this.subscribers.push(mapFn)
+        return this
+    }
+
+    spawn(): Future<T> {
+        runtime.spawn(this)
         return this
     }
 }
@@ -25,8 +30,11 @@ export class Runtime {
             future.status = 'pending'
             this.pending.push(future)
             future.fn(res => {
-                future.thenFn?.(res)
                 future.status = 'done'
+                for (const s of future.subscribers) {
+                    s(res)
+                }
+                future.subscribers.length = 0
                 this.pending.splice(this.pending.indexOf(future), 1)
             })
         }
@@ -41,16 +49,16 @@ export class Runtime {
 }
 export const runtime = new Runtime()
 
-runtime.spawn(
-    new Future<void>(done => {
-        main()
-        done()
-    })
-)
+const delay = (ms: number): Future<void> => new Future(res => setTimeout(() => res(), ms))
+
+new Future<void>(done => {
+    main()
+    done()
+}).spawn()
 runtime.loop()
 
 function main() {
     console.log('Hello, World!')
-    const f = new Future(res => setTimeout(() => res(5), 1000)).map(res => console.log('res', res))
+    const f = delay(1000).onComplete(res => console.log('res', res))
     runtime.spawn(f)
 }
