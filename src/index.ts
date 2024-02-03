@@ -9,9 +9,13 @@ export class Future<T> {
         public status: Status = 'created'
     ) {}
 
-    onComplete(mapFn: (result: T) => void): Future<T> {
-        this.subscribers.push(mapFn)
+    onComplete(fn: (result: T) => void): Future<T> {
+        this.subscribers.push(fn)
         return this
+    }
+
+    map<U>(fn: (result: T) => U): Future<U> {
+        return new Future(done => this.onComplete(res => done(fn(res))))
     }
 
     spawn(): Future<T> {
@@ -59,6 +63,8 @@ runtime.loop()
 
 function main() {
     console.log('Hello, World!')
-    const f = delay(1000).onComplete(res => console.log('res', res))
-    runtime.spawn(f)
+    const f = delay(1000).spawn()
+    f.map(() => 5)
+        .onComplete(res => console.log('res', res))
+        .spawn()
 }
