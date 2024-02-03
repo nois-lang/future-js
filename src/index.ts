@@ -1,12 +1,10 @@
-export type Result<T, E> = { type: 'ok'; value: T } | { type: 'error'; value: E }
-
-export type Status = 'created' | 'queued' | 'pending' | 'done'
+export type State<T> = { type: 'created' | 'queued' | 'pending' } | { type: 'done'; result: T }
 
 export class Future<T> {
     constructor(
         public fn: (done: (result: T) => void) => void,
         public subscribers: ((result: T) => void)[] = [],
-        public status: Status = 'created'
+        public state: State<T> = { type: 'created' }
     ) {}
 
     onComplete(fn: (result: T) => void): Future<T> {
@@ -43,10 +41,10 @@ export class Runtime {
     loop(): void {
         if (this.queue.length !== 0) {
             const future = this.queue.splice(0, 1)[0]
-            future.status = 'pending'
+            future.state = { type: 'pending' }
             this.pending.push(future)
             future.fn(res => {
-                future.status = 'done'
+                future.state = { type: 'done', result: res }
                 for (const s of future.subscribers) {
                     s(res)
                 }
@@ -61,7 +59,16 @@ export class Runtime {
 
     spawn(future: Future<any>): void {
         this.queue.push(future)
-        future.status = 'queued'
+        future.state = { type: 'queued' }
+    }
+
+    cancel(future: Future<any>): void {
+        if (future.state.type === 'queued') {
+            this.queue.splice(this.queue.indexOf(future), 1)
+        }
+        if (future.state.type === 'pending') {
+            this.pending.splice(this.pending.indexOf(future), 1)
+        }
     }
 }
 export const runtime = new Runtime()
