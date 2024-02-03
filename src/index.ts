@@ -54,7 +54,7 @@ export class Runtime {
     constructor(public pollingRate: number = 5) {}
 
     loop(): void {
-        if (this.queue.length !== 0) {
+        while (this.queue.length > 0) {
             const future = this.queue.splice(0, 1)[0]
             future.state = { type: 'pending' }
             this.pending.push(future)
