@@ -17,7 +17,8 @@
                 "noConfusingVoidType": "off"
             },
             "complexity": {
-                "noForEach": "off"
+                "noForEach": "off",
+                "useFlatMap": "off"
             },
             "style": {
                 "noNonNullAssertion": "off",

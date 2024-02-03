@@ -1,5 +1,7 @@
 export type State<T> = { type: 'created' | 'queued' | 'pending' } | { type: 'resolved'; result: T }
 
+export type FlatFuture<T> = T extends Future<infer U> ? U : T
+
 export class Future<T> {
     constructor(
         public fn: (done: (result: T) => void) => void,
@@ -24,7 +26,19 @@ export class Future<T> {
     }
 
     flatMap<U>(fn: (result: T) => Future<U>): Future<U> {
-        return new Future(done => this.onComplete(res => fn(res).onComplete(r => done(r))))
+        return new Future(done => this.map(fn).flat().onComplete(done))
+    }
+
+    flat(): Future<FlatFuture<T>> {
+        return new Future(done =>
+            this.onComplete(res => {
+                if (res instanceof Future) {
+                    res.onComplete(r => done(r))
+                } else {
+                    done(<FlatFuture<T>>res)
+                }
+            })
+        )
     }
 
     spawn(): Future<T> {
