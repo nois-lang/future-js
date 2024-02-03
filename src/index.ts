@@ -1,4 +1,4 @@
-export type State<T> = { type: 'created' | 'queued' | 'pending' } | { type: 'done'; result: T }
+export type State<T> = { type: 'created' | 'queued' | 'pending' } | { type: 'resolved'; result: T }
 
 export class Future<T> {
     constructor(
@@ -8,6 +8,13 @@ export class Future<T> {
     ) {}
 
     onComplete(fn: (result: T) => void): Future<T> {
+        if (this.state.type === 'resolved') {
+            fn(this.state.result)
+            return this
+        }
+        if (this.state.type === 'created') {
+            this.spawn()
+        }
         this.subscribers.push(fn)
         return this
     }
@@ -17,13 +24,7 @@ export class Future<T> {
     }
 
     flatMap<U>(fn: (result: T) => Future<U>): Future<U> {
-        return new Future(done =>
-            this.onComplete(res =>
-                fn(res)
-                    .spawn()
-                    .onComplete(r => done(r))
-            )
-        )
+        return new Future(done => this.onComplete(res => fn(res).onComplete(r => done(r))))
     }
 
     spawn(): Future<T> {
@@ -44,7 +45,7 @@ export class Runtime {
             future.state = { type: 'pending' }
             this.pending.push(future)
             future.fn(res => {
-                future.state = { type: 'done', result: res }
+                future.state = { type: 'resolved', result: res }
                 for (const s of future.subscribers) {
                     s(res)
                 }
@@ -81,16 +82,9 @@ new Future<void>(done => {
 }).spawn()
 runtime.loop()
 
-function main() {
+async function main() {
     console.log('start')
-    const a = delay(500)
-        .spawn()
-        .onComplete(() => console.log('one'))
-    const b = a
-        .flatMap(() => delay(500))
-        .spawn()
-        .onComplete(() => console.log('two'))
-    b.map(() => 5)
-        .spawn()
-        .onComplete(res => console.log('three', res))
+    const a = delay(500).onComplete(() => console.log('one'))
+    const b = a.flatMap(() => delay(500)).onComplete(() => console.log('two'))
+    b.map(() => 5).onComplete(res => console.log('three', res))
 }
