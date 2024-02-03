@@ -1,0 +1,25 @@
+{
+    "$schema": "https://json.schemastore.org/package.json",
+    "name": "future-js",
+    "version": "0.0.1",
+    "description": "Future POC in JS for [Nois](https://nois.ivnj.org/)",
+    "scripts": {
+        "run": "bun run src/index.ts",
+        "build": "tsc && npm run build:prepublish",
+        "build:prepublish": "cp package.json dist && find dist -name \"*.spec.*\" -delete",
+        "test": "bun test",
+        "ci": "npm run test",
+        "clean": "rm -r dist"
+    },
+    "type": "module",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "author": "",
+    "license": "MIT",
+    "devDependencies": {
+        "@types/jasmine": "~4.3.5",
+        "@types/node": "~18.16.20",
+        "bun": "~1.0.23",
+        "typescript": "~5.3.3"
+    }
+}
