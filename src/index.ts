@@ -1,6 +1,6 @@
 export type Result<T, E> = { type: 'ok'; value: T } | { type: 'error'; value: E }
 
-export type Status = 'created' | 'pending' | 'done'
+export type Status = 'created' | 'queued' | 'pending' | 'done'
 
 export class Future<T> {
     constructor(
@@ -18,6 +18,16 @@ export class Future<T> {
         return new Future(done => this.onComplete(res => done(fn(res))))
     }
 
+    flatMap<U>(fn: (result: T) => Future<U>): Future<U> {
+        return new Future(done =>
+            this.onComplete(res =>
+                fn(res)
+                    .spawn()
+                    .onComplete(r => done(r))
+            )
+        )
+    }
+
     spawn(): Future<T> {
         runtime.spawn(this)
         return this
@@ -25,8 +35,10 @@ export class Future<T> {
 }
 
 export class Runtime {
-    private queue: Future<any>[] = []
-    private pending: Future<any>[] = []
+    queue: Future<any>[] = []
+    pending: Future<any>[] = []
+
+    constructor(public pollingRate: number = 5) {}
 
     loop(): void {
         if (this.queue.length !== 0) {
@@ -43,12 +55,13 @@ export class Runtime {
             })
         }
         if (this.queue.length !== 0 || this.pending.length !== 0) {
-            setTimeout(() => this.loop(), 10)
+            setTimeout(() => this.loop(), this.pollingRate)
         }
     }
 
     spawn(future: Future<any>): void {
         this.queue.push(future)
+        future.status = 'queued'
     }
 }
 export const runtime = new Runtime()
@@ -62,9 +75,15 @@ new Future<void>(done => {
 runtime.loop()
 
 function main() {
-    console.log('Hello, World!')
-    const f = delay(1000).spawn()
-    f.map(() => 5)
-        .onComplete(res => console.log('res', res))
+    console.log('start')
+    const a = delay(500)
         .spawn()
+        .onComplete(() => console.log('one'))
+    const b = a
+        .flatMap(() => delay(500))
+        .spawn()
+        .onComplete(() => console.log('two'))
+    b.map(() => 5)
+        .spawn()
+        .onComplete(res => console.log('three', res))
 }
