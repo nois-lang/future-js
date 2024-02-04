@@ -72,18 +72,52 @@ export class Runtime {
         }
     }
 
-    spawn(future: Future<any>): void {
+    spawn<T>(future: Future<T>): void {
         this.queue.push(future)
         future.state = { type: 'queued' }
     }
 
-    cancel(future: Future<any>): void {
+    cancel<T>(future: Future<T>): void {
         if (future.state.type === 'queued') {
             this.queue.splice(this.queue.indexOf(future), 1)
         }
         if (future.state.type === 'pending') {
             this.pending.splice(this.pending.indexOf(future), 1)
         }
+    }
+
+    /**
+     * Return a future that will resolve with an array of results of all specified futures.
+     * Order of results follows order of futures
+     */
+    all<T>(futures: Future<T>[]): Future<T[]> {
+        if (futures.length === 0) return new Future(done => done([]))
+        const result: T[] = new Array(futures.length).fill(undefined)
+        let resolvedCount = 0
+        return new Future(done => {
+            for (let i = 0; i < futures.length; i++) {
+                const f = futures[i]
+                f.onComplete(r => {
+                    result[i] = r
+                    resolvedCount++
+                    if (resolvedCount === result.length) {
+                        done(result)
+                    }
+                })
+            }
+        })
+    }
+
+    /**
+     * Return a result of a first resolved future
+     */
+    first<T>(futures: Future<T>[]): Future<T> {
+        if (futures.length === 0) throw Error('no futures')
+        return new Future(done => {
+            for (const f of futures) {
+                f.onComplete(r => done(r))
+            }
+        })
     }
 }
 export const runtime = new Runtime()
@@ -101,4 +135,7 @@ async function main() {
     const a = delay(500).onComplete(() => console.log('one'))
     const b = a.flatMap(() => delay(500)).onComplete(() => console.log('two'))
     b.map(() => 5).onComplete(res => console.log('three', res))
+    runtime.all([a, b]).onComplete(res => console.log('all', { res }))
+    runtime.first([a, b]).onComplete(res => console.log('first', { res }))
+    console.log('end')
 }
