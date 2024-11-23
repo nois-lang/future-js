@@ -1,20 +1,71 @@
-type Future<T> = (...any: any[]) => Generator<any, T>
+type Future<T> = Generator<unknown, T>
 
-const never = (): Future<void> =>
-    function* (): Generator<void> {
-        while (true) {
-            yield
+type Executor = {
+    futures: Future<unknown>[]
+}
+
+const executor: Executor = { futures: [] }
+
+const spawn = <T>(future: Future<T>, executor: Executor): Future<T> => {
+    executor.futures.push(future)
+    return future
+}
+
+const run = (executor: Executor): void => {
+    setTimeout(() => {
+        for (let i = executor.futures.length - 1; i >= 0; i--) {
+            const f = executor.futures[i]
+            if (f.next().done) {
+                executor.futures.splice(i, 1)
+            }
+        }
+        if (executor.futures.length > 0) {
+            run(executor)
+        }
+    })
+}
+
+// WARN: {@link fromClosure} and {@link fromPromise} won't work with this since while loop is
+// blocking the main thread
+const drain = <T>(c: Future<T>): void => {
+    while (true) {
+        const { done } = c.next()
+        if (done) {
+            break
         }
     }
+}
 
-const delay = (ms: number): Future<number> =>
-    function* (): Generator<void, number> {
-        const doneBy = performance.now() + ms
-        while (doneBy >= performance.now()) {
-            yield
+const drainAsync = <T>(c: Future<T>): void => {
+    setTimeout(() => {
+        if (!c.next().done) {
+            drainAsync(c)
         }
-        return 5
+    })
+}
+
+const or = function* <T>(f1: Future<T>, f2: Future<T>): Future<T> {
+    while (true) {
+        const r1 = f1.next()
+        const r2 = f2.next()
+        if (r1.done) return r1.value
+        if (r2.done) return r2.value
+        yield
     }
+}
+
+const never = function* (): Future<void> {
+    while (true) {
+        yield
+    }
+}
+
+const delay = function* (ms: number): Future<void> {
+    const doneBy = performance.now() + ms
+    while (doneBy >= performance.now()) {
+        yield
+    }
+}
 
 const fromClosure = function* <T>(fn: (done: (res: T) => void) => void): Generator<any, T> {
     let done = false
@@ -33,8 +84,8 @@ const fromPromise = function* <T>(promise: Promise<T>): Generator<any, T> {
     return yield* fromClosure(done => promise.then(r => done(r)))
 }
 
-const longFive: Future<number> = function* () {
-    yield* delay(1000)()
+const longFive = function* (): Future<number> {
+    yield* delay(100)
     return 5
 }
 
@@ -52,32 +103,32 @@ const main = function* () {
     console.log(n)
 
     console.log('\ndelay')
-    yield* bench(delay(1000)())
+    yield* bench(delay(100))
 
     console.log('\nfromClosure')
-    const res = yield* bench(fromClosure(done => setTimeout(() => done('result from closure'), 1000)))
-    console.log(res)
+    const closureRes = yield* bench(fromClosure(done => setTimeout(() => done('result from closure'), 100)))
+    console.log(closureRes)
 
     console.log('\nfromPromise')
     const resp = yield* bench(fromPromise(fetch('https://google.com')))
     console.log(resp)
 
+    console.log('\nrace')
+    const race1 = (function* () {
+        yield* delay(50)
+        return 50
+    })()
+    const race2 = (function* () {
+        yield* delay(100)
+        return 100
+    })()
+
+    const res = yield* or(race1, race2)
+    console.log(res)
+
     console.log('\nnever')
-    yield* bench(never()())
+    spawn(bench(never()), executor)
 }
 
-const run = <T>(task: Future<T>) => {
-    const execution = task()
-    drainAsync(execution)
-}
-
-const drainAsync = <T>(gen: Generator<T>) => {
-    setTimeout(() => {
-        const { done } = gen.next()
-        if (!done) {
-            drainAsync(gen)
-        }
-    })
-}
-
-run(main)
+spawn(main(), executor)
+run(executor)
