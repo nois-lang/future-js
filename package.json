@@ -5,6 +5,7 @@
     "description": "Future POC in JS for [Nois](https://nois.ivnj.org/)",
     "scripts": {
         "run": "bun run src/index.ts",
+        "run:generators": "bun run src/generators.ts",
         "build": "tsc && npm run build:prepublish",
         "build:prepublish": "cp package.json dist && find dist -name \"*.spec.*\" -delete",
         "test": "bun test",

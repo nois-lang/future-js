@@ -130,7 +130,7 @@ new Future<void>(done => {
 }).spawn()
 runtime.loop()
 
-async function main() {
+function main() {
     console.log('start')
     const a = delay(500).onComplete(() => console.log('one'))
     const b = a.flatMap(() => delay(500)).onComplete(() => console.log('two'))
